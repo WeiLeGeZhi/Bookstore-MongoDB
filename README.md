@@ -1,2 +1,2 @@
-# ContemporaryDBMS_P1
-WEN Zhaohe &amp; LIU Yongzhe's ContemporaryDBMS P1
+# Bookstore-MongoDB
+WEN Zhaohe &amp; LIU Yongzhe's first project of the course Contemporary Database Management System
