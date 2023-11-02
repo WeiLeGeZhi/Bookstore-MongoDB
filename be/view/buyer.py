@@ -40,3 +40,11 @@ def add_funds():
     b = Buyer()
     code, message = b.add_funds(user_id, password, add_value)
     return jsonify({"message": message}), code
+
+
+@bp_buyer.route("/get_order_history", methods=["POST"])
+def get_order_history():
+    user_id = request.json.get("user_id")
+    b = Buyer()
+    code, message, _ = b.get_order_history(user_id)
+    return jsonify({"message": message}), code

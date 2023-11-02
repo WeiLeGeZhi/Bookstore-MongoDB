@@ -12,7 +12,7 @@ class Buyer(db_conn.DBConn):
         db_conn.DBConn.__init__(self)
 
     def new_order(
-            self, user_id: str, store_id: str, id_and_count: [(str, int)]
+        self, user_id: str, store_id: str, id_and_count: [(str, int)]
     ) -> (int, str, str):
         order_id = ""
         try:
@@ -34,10 +34,12 @@ class Buyer(db_conn.DBConn):
                     return error.error_stock_level_low(book_id) + (order_id,)
 
                 # 更新库存
-                self.conn["store"].update_one(
-                    {"store_id": store_id, "book_id": book_id},
+                result = self.conn["store"].update_one(
+                    {"store_id": store_id, "book_id": book_id, "stock_level": {"$gte": count}},
                     {"$inc": {"stock_level": -count}}
                 )
+                if result.modified_count == 0:
+                    return error.error_stock_level_low(book_id) + (order_id,)
 
                 # 计算价格
                 book_info = json.loads(book["book_info"])
@@ -57,9 +59,14 @@ class Buyer(db_conn.DBConn):
             # 插入订单
             self.conn["new_order"].insert_one(order)
             order_id = uid
+
+            # 存入历史订单
+            order["status"] = "pending"
+            self.conn["order_history"].insert_one(order)
+            self.conn["order_history_detail"].insert_many(order_details)
         except pymongo.errors.PyMongoError as e:
-            logging.error(f"MongoDB Error: {str(e)}")
-            return 528, str(e), ""
+            logging.error("528, {}".format(str(e)))
+            return 528, "{}".format(str(e)), ""
         except BaseException as e:
             logging.info("530, {}".format(str(e)))
             return 530, "{}".format(str(e)), ""
@@ -106,23 +113,30 @@ class Buyer(db_conn.DBConn):
             if balance < total_price:
                 return error.error_not_sufficient_funds(order_id)
 
-            conn["user"].update_one(
+            result = conn["user"].update_one(
                 {"user_id": buyer_id, "balance": {"$gte": total_price}},
                 {"$inc": {"balance": -total_price}}
             )
+            if result.modified_count == 0:
+                return error.error_not_sufficient_funds(order_id)
 
-            conn["user"].update_one(
+            result = conn["user"].update_one(
                 {"user_id": buyer_id},
                 {"$inc": {"balance": total_price}}
             )
+            if result.modified_count == 0:
+                return error.error_non_exist_user_id(buyer_id)
 
-            conn["new_order"].delete_one({"order_id": order_id})
+            result = conn["new_order"].delete_one({"order_id": order_id})
+            if result.deleted_count == 0:
+                return error.error_invalid_order_id(order_id)
 
-            conn["new_order_detail"].delete_many({"order_id": order_id})
-
+            result = conn["new_order_detail"].delete_many({"order_id": order_id})
+            if result.deleted_count == 0:
+                return error.error_invalid_order_id(order_id)
 
         except pymongo.errors.PyMongoError as e:
-            return 528, str(e), ""
+            return 528, "{}".format(str(e))
 
         except BaseException as e:
             return 530, "{}".format(str(e))
@@ -138,10 +152,12 @@ class Buyer(db_conn.DBConn):
             if user["password"] != password:
                 return error.error_authorization_fail()
 
-            self.conn["user"].update_one(
+            result = self.conn["user"].update_one(
                 {"user_id": user_id},
                 {"$inc": {"balance": add_value}}
             )
+            if result.modified_count == 0:
+                return error.error_non_exist_user_id(user_id)
 
 
         except pymongo.errors.PyMongoError as e:
@@ -150,3 +166,38 @@ class Buyer(db_conn.DBConn):
             return 530, "{}".format(str(e))
 
         return 200, "ok"
+
+    def get_order_history(self, user_id: str) -> (int, str, [dict]):
+        try:
+            orders = self.conn["order_history"].find({"user_id": user_id})
+            orders_list = list(orders)
+            if not orders_list:
+                return error.error_non_exist_user_id(user_id) + ([],)
+            order_list = []
+            for order in orders:
+                order_id = order["order_id"]
+                order_details = self.conn["order_history_detail"].find({"order_id": order_id})
+                order_detail_list = []
+                for detail in order_details:
+                    book_id = detail["book_id"]
+                    count = detail["count"]
+                    price = detail["price"]
+                    order_detail = {
+                        "book_id": book_id,
+                        "count": count,
+                        "price": price
+                    }
+                    order_detail_list.append(order_detail)
+
+                order_info = {
+                    "order_id": order_id,
+                    "order_detail": order_detail_list
+                }
+                order_list.append(order_info)
+
+        except pymongo.errors.PyMongoError as e:
+            return 528, "{}".format(str(e)), []
+        except BaseException as e:
+            return 530, "{}".format(str(e)), []
+
+        return 200, "ok", order_list
