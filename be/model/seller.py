@@ -73,3 +73,28 @@ class Seller(db_conn.DBConn):
         except BaseException as e:
             return 530, "{}".format(str(e))
         return 200, "ok"
+
+    def ship_order(self, user_id: str, store_id: str, order_id: str) -> (int, str):
+        try:
+            if not self.user_id_exist(user_id):
+                return error.error_non_exist_user_id(user_id)
+            if not self.store_id_exist(store_id):
+                return error.error_non_exist_store_id(store_id)
+
+            order = self.conn['order_history'].find_one({'order_id': order_id})
+            if not order:
+                return error.error_invalid_order_id(order_id)
+
+            status = order['status']
+            if status != 'paid':
+                return error.error_not_paid(order_id)
+
+            self.conn['order_history'].update_one(
+                {'order_id': order_id},
+                {'$set': {'status': 'shipped'}},
+            )
+        except pymongo.errors.PyMongoError as e:
+            return 528, "{}".format(str(e))
+        except BaseException as e:
+            return 530, "{}".format(str(e))
+        return 200, "ok"
