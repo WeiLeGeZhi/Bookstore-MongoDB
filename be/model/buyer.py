@@ -3,6 +3,7 @@ import uuid
 import json
 import logging
 import pymongo
+import threading
 from be.model import db_conn
 from be.model import error
 
@@ -59,6 +60,11 @@ class Buyer(db_conn.DBConn):
             # 插入订单
             self.conn["new_order"].insert_one(order)
             order_id = uid
+
+            # 延迟队列
+
+            timer = threading.Timer(60.0, self.cancel_order, args=[user_id, order_id])
+            timer.start()
 
             # 存入历史订单
             order["status"] = "pending"
@@ -135,6 +141,13 @@ class Buyer(db_conn.DBConn):
             if result.deleted_count == 0:
                 return error.error_invalid_order_id(order_id)
 
+            result = conn["order_history"].update_one(
+                {"order_id": order_id},
+                {"$set": {"status": "paid"}}
+            )
+            if result.modified_count == 0:
+                return error.error_invalid_order_id(order_id)
+
         except pymongo.errors.PyMongoError as e:
             return 528, "{}".format(str(e))
 
@@ -174,7 +187,7 @@ class Buyer(db_conn.DBConn):
             if not orders_list:
                 return error.error_non_exist_user_id(user_id) + ([],)
             order_list = []
-            for order in orders:
+            for order in orders_list:
                 order_id = order["order_id"]
                 order_details = self.conn["order_history_detail"].find({"order_id": order_id})
                 order_detail_list = []
@@ -201,3 +214,61 @@ class Buyer(db_conn.DBConn):
             return 530, "{}".format(str(e)), []
 
         return 200, "ok", order_list
+
+    def cancel_order(self, user_id: str, order_id: str) -> (int, str):
+        try:
+            order = self.conn["new_order"].find_one({"order_id": order_id})
+            if not order:
+                return error.error_invalid_order_id(order_id)
+
+            buyer_id = order["user_id"]
+            if buyer_id != user_id:
+                return error.error_authorization_fail()
+
+            result = self.conn["new_order"].delete_one({"order_id": order_id})
+            if result.deleted_count == 0:
+                return error.error_invalid_order_id(order_id)
+
+            result = self.conn["new_order_detail"].delete_many({"order_id": order_id})
+            if result.deleted_count == 0:
+                return error.error_invalid_order_id(order_id)
+
+            result = self.conn["order_history"].update_one(
+                {"order_id": order_id},
+                {"$set": {"status": "cancelled"}}
+            )
+            if result.modified_count == 0:
+                return error.error_invalid_order_id(order_id)
+        except pymongo.errors.PyMongoError as e:
+            return 528, "{}".format(str(e))
+        except BaseException as e:
+            return 530, "{}".format(str(e))
+
+        return 200, "ok"
+
+    def receive_order(self, user_id: str, order_id: str) -> (int, str):
+        try:
+            order = self.conn["order_history"].find_one({"order_id": order_id})
+            if not order:
+                return error.error_invalid_order_id(order_id)
+
+            buyer_id = order["user_id"]
+            if buyer_id != user_id:
+                return error.error_authorization_fail()
+            
+            status = order["status"]
+            if status != "shipped":
+                return error.error_not_shipped(order_id)
+
+            result = self.conn["order_history"].update_one(
+                {"order_id": order_id},
+                {"$set": {"status": "received"}}
+            )
+            if result.modified_count == 0:
+                return error.error_invalid_order_id(order_id)
+        except pymongo.errors.PyMongoError as e:
+            return 528, "{}".format(str(e))
+        except BaseException as e:
+            return 530, "{}".format(str(e))
+
+        return 200, "ok"
