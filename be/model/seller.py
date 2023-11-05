@@ -1,4 +1,4 @@
-import sqlite3 as sqlite
+#import sqlite3 as sqlite
 from be.model import error
 from be.model import db_conn
 import pymongo

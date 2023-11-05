@@ -69,5 +69,5 @@ def error_authorization_fail():
     return 401, error_code[401]
 
 
-def error_and_message(code, message):
-    return code, message
+# def error_and_message(code, message):
+#     return code, message

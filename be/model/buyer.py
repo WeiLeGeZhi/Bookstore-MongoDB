@@ -1,4 +1,4 @@
-import sqlite3 as sqlite
+#import sqlite3 as sqlite
 import uuid
 import json
 import logging
@@ -13,7 +13,7 @@ class Buyer(db_conn.DBConn):
         db_conn.DBConn.__init__(self)
 
     def new_order(
-        self, user_id: str, store_id: str, id_and_count: [(str, int)]
+            self, user_id: str, store_id: str, id_and_count: [(str, int)]
     ) -> (int, str, str):
         order_id = ""
         try:
@@ -127,7 +127,7 @@ class Buyer(db_conn.DBConn):
                 return error.error_not_sufficient_funds(order_id)
 
             result = conn["user"].update_one(
-                {"user_id": buyer_id},
+                {"user_id": seller_id},
                 {"$inc": {"balance": total_price}}
             )
             if result.modified_count == 0:
@@ -255,7 +255,7 @@ class Buyer(db_conn.DBConn):
             buyer_id = order["user_id"]
             if buyer_id != user_id:
                 return error.error_authorization_fail()
-            
+
             status = order["status"]
             if status != "shipped":
                 return error.error_not_shipped(order_id)

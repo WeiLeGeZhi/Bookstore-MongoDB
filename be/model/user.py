@@ -1,7 +1,7 @@
 import jwt
 import time
 import logging
-import sqlite3 as sqlite
+#import sqlite3 as sqlite
 from be.model import error
 from be.model import db_conn
 import pymongo
@@ -32,6 +32,10 @@ def jwt_encode(user_id: str, terminal: str) -> str:
 def jwt_decode(encoded_token, user_id: str) -> str:
     decoded = jwt.decode(encoded_token, key=user_id, algorithms="HS256")
     return decoded
+
+
+# def search_global(title='', content='', tag=''):
+#     return 200, "ok"
 
 
 class User(db_conn.DBConn):
@@ -168,3 +172,36 @@ class User(db_conn.DBConn):
         except BaseException as e:
             return 530, "{}".format(str(e))
         return 200, "ok"
+
+    def search_book(self, title='', content='', tag='', store_id=''):
+        try:
+            query = {}
+
+            if title:
+                query['title'] = {"$regex": title}
+            if content:
+                query['content'] = {"$regex": content}
+            if tag:
+                query['tags'] = {"$regex": tag}
+
+            # 检查 store_id 是否为空
+            if store_id:
+                # 查询 store 集合，获取指定 store_id 下的所有 book_id
+                store_query = {"store_id": store_id}
+                store_result = list(self.conn["store"].find(store_query))
+                if len(store_result) == 0:
+                    return error.error_non_exist_store_id(store_id)
+                book_ids = [item["book_id"] for item in store_result]
+                # 添加 book_id 到查询条件
+                query['id'] = {"$in": book_ids}
+
+            # 执行查询
+            results = list(self.conn["books"].find(query))
+        except pymongo.errors.PyMongoError as e:
+            return 528, str(e)
+        except BaseException as e:
+            return 530, "{}".format(str(e))
+        if not results:
+            return 529, "No matching books found."
+        else:
+            return 200, "ok"

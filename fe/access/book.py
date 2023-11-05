@@ -1,10 +1,10 @@
 import os
-import sqlite3 as sqlite
+# import sqlite3 as sqlite
 import random
 import base64
 import pymongo
-from typing import List
-import simplejson as json
+# from typing import List
+# import simplejson as json
 
 
 class Book:
@@ -32,11 +32,12 @@ class Book:
 
 class BookDB:
     def __init__(self, large: bool = False):
-        parent_path = os.path.dirname(os.path.dirname(__file__))
+        # parent_path = os.path.dirname(os.path.dirname(__file__))
         db_path = "mongodb://localhost:27017"
         db_name = "bookstore1"
         self.client = pymongo.MongoClient(db_path)
         self.db = self.client[db_name]
+        self.db.books.create_index([("id", pymongo.ASCENDING)])
 
     def get_book_count(self):
         return self.db.books.count_documents({})

@@ -1,6 +1,6 @@
-import logging
-import os
-import sqlite3 as sqlite
+# import logging
+# import os
+# import sqlite3 as sqlite
 import pymongo
 
 
@@ -14,11 +14,14 @@ class Store:
         self.init_collections()
 
     def init_collections(self):
-        user_collection = self.database["user"]
-        user_store_collection = self.database["user_store"]
-        store_collection = self.database["store"]
-        order_collection = self.database["new_order"]
-        order_detail_collection = self.database["new_order_detail"]
+        # user_collection = self.database["user"]
+        # user_store_collection = self.database["user_store"]
+        # store_collection = self.database["store"]
+        # order_collection = self.database["new_order"]
+        # order_detail_collection = self.database["new_order_detail"]
+        self.database["user"].create_index([("user_id", pymongo.ASCENDING)])
+        self.database["user_store"].create_index([("user_id", pymongo.ASCENDING), ("store_id", pymongo.ASCENDING)])
+        self.database["store"].create_index([("book_id", pymongo.ASCENDING), ("store_id", pymongo.ASCENDING)])
 
     def get_db_conn(self):
         return self.database
